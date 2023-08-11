@@ -3,61 +3,77 @@ package split_pdf;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.pdfbox.multipdf.Splitter;
 import org.apache.pdfbox.pdmodel.PDDocument;
 
 public class CreatePdf {
-	public static int numOfPage =3;
+	final static String source = "C:/Users/maymyatthinzar/sample_pdf/source_folder";
+	final static String destination = "C:/Users/maymyatthinzar/sample_pdf/splitted_folder/";
+	final static String done = "C:/Users/maymyatthinzar/sample_pdf/done_folder/";
+	public static int numOfPage = 1;
+	private static LocalDate date = LocalDate.now();
+	private static DateTimeFormatter formated = DateTimeFormatter.ofPattern("yyyyMMdd");
 
 	public static void main(String[] args) throws IOException {
 		System.out.println("start main method..");
-		final String source = "C:/Users/maymyatthinzar/sample_pdf/source_folder";
-		final String destination = "C:/Users/maymyatthinzar/sample_pdf/splitted_folder/";
 		if (numOfPage > 0) {
-			readFileFromResource(source, destination);
+			readFileFromResource(source, destination, done);
 		}
 		System.out.println("end main method..");
 	}
 
-	public static void readFileFromResource(String source, String destination) throws IOException {
+	public static void readFileFromResource(String source, String destination, String done) throws IOException {
 		File f = new File(source);
 		File listFile[] = f.listFiles();
 		for (File file : listFile) {
-			
+			File filePath = file;
+			String newFolderName = FilenameUtils.getBaseName(filePath.getName());
 			if (file.getName().endsWith(".pdf")) {
-				System.out.println("checking pdf or not condition......");
-				File filePath = file;
-				// check exist or not pdf directory
+				/* check exist or not pdf directory	*/
 				if (filePath != null && filePath.exists()) {
-					System.out.println("inside condition........");
-					// making new folder
-					String newFolderName = FilenameUtils.getBaseName(filePath.getName());
+					/*  making new folder */
 					File destinationpath = new File(destination, newFolderName);
 					destinationpath.mkdirs();
-					String foldername = destinationpath.getName();
-					// add index file
-					System.out.println("new folder path :"+destinationpath);
-					System.out.println("folder name : "+foldername);
-					addIndexFile(newFolderName, destinationpath.getAbsolutePath());
-					// loading pdf
+					/*  loading pdf	*/
 					PDDocument document = PDDocument.load(filePath);
-					// splitting pdf
-					splitPdfPerPage(document, numOfPage, destination, foldername);
+					/*  splitting pdf */
+					List<String>nameList=splitPdfPerPage(document, numOfPage, destination, destinationpath.getName());
+
+					/*  add index file */
+					addIndexFile(newFolderName, destination + newFolderName, nameList);
+					document.close();
 				}
+
+				/* move to done folder from resource folder */
+				System.out.println("current: " + file.getAbsolutePath());
+				File doneFile = new File(done + "/" + file.getAbsoluteFile().getName());
+				System.out.println("reach: " + doneFile.getAbsolutePath());
+				//FileUtils.copyFile(file, doneFile);
+				Files.copy(file.toPath(),doneFile.toPath(),StandardCopyOption.REPLACE_EXISTING);
+				file.deleteOnExit();
 			}
+
 		}
+		
 	}
 
-	public static void splitPdfPerPage(PDDocument doc, int numOfSplitPage, String destinationpath, String foldername)
-			throws IOException {
+	public static List<String> splitPdfPerPage(PDDocument doc, int numOfSplitPage,
+											String destination,String foldername)throws IOException {
+		List<String> nameOfFiles = new ArrayList<>();
 		int docPages = countPages(doc);
 		if (doc.getNumberOfPages() > 0) {
 			try {
+				/*	get splitter  */
 				Splitter splitter = new Splitter();
 				splitter.setSplitAtPage(numOfSplitPage);
 				List<PDDocument> splitedDoc = splitter.split(doc);
@@ -65,45 +81,46 @@ public class CreatePdf {
 				Iterator<PDDocument> iterator = splitedDoc.listIterator();
 				while (iterator.hasNext()) {
 					PDDocument pages = iterator.next();
-					LocalDate date = LocalDate.now();
-					DateTimeFormatter formated = DateTimeFormatter.ofPattern("yyyyMMdd");
+
 					String formatDate = date.format(formated);
-					String desc = destinationpath + foldername;
-					pages.save(desc + "/" + foldername + "_" + formatDate + "_"
-							+ String.format("%0" + docPages + "d", size++) + ".pdf");
+					String desc = destination + foldername;
+					String name = foldername + "_" + formatDate + "_" +String.format("%0" + docPages + "d", size++) + ".pdf";
+
+					pages.save(desc + "/" + name);
+					nameOfFiles.add(name);
+					pages.close();
 				}
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 			doc.close();
 		}
+		return nameOfFiles;
 	}
 
-	public static int countPages(PDDocument doct) {
+	public static int countPages(PDDocument doct) throws IOException {
 		int i = doct.getNumberOfPages();
 		int count = 0;
 		while (i != 0) {
 			i = i / 10;
 			++count;
 		}
+		doct.close();
 		return count;
 	}
 
-	public static void addIndexFile(String foldername, String path) {
-		System.out.println("param: "+foldername +"\n param path: "+path);
-		String tem = path + "/" ;
-		File f = new File(path);
-		System.out.println("file path: " + f.getAbsolutePath());
+	public static void addIndexFile(String foldername, String path,List<String>nameOfFiles) {
+		String tem = path + "/";
 		try {
-			File fil = new File(tem, "index.txt");
+			/* add text file called index */
+			File fil = new File(tem, "index_" + foldername + "_" + date.format(formated) + ".txt");
 			FileWriter fwrite = new FileWriter(fil);
-			fwrite.write("data writing..........");
-			System.out.println("success ");
-			// while(path != null){
-			// File Lfiles=f.listFiles();
-			// }
+			for (String fn : nameOfFiles) {
+				fwrite.write(fn + " | Split pdf successful.\n");
+			}
+			fwrite.close();
 		} catch (Exception e) {
-			// TODO: handle exception
+			e.printStackTrace();
 		}
 	}
 }

@@ -9,7 +9,7 @@ public class CreateWriteTxt {
     public static void main(String[] args) {
         try {
             File f = new File(source,"sample.txt");
-            System.out.println(f.createNewFile());
+            //System.out.println(f.createNewFile());
             FileWriter fw=new FileWriter(f);
             fw.write("blah blah blah blah blah blah blah blah blah ");
             fw.close();
